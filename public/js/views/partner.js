@@ -193,7 +193,7 @@ async function earnings() {
     <h1>${t('earn.title')}</h1>
     <p class="muted">${dateLabel(r.today, r.today)}</p>
     <div class="grid2">
-      <div class="stat"><span class="ico amber" aria-hidden="true">💰</span><div class="big">${money(d.payout)}</div><div class="muted small">${t('earn.today')}</div></div>
+      <div class="stat"><span class="ico" aria-hidden="true">💰</span><div class="big">${money(d.payout)}</div><div class="muted small">${t('earn.today')}</div></div>
       <div class="stat"><span class="ico" aria-hidden="true">✅</span><div class="big">${String(d.pickups)}</div><div class="muted small">${t('earn.pickups')}</div></div>
     </div>
     <div class="card" style="margin-top:12px">

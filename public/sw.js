@@ -1,11 +1,11 @@
 // Service worker: makes the app installable and fast on slow connections.
 // App files are served from the cache first and refreshed in the background.
 // API calls (/api/...) always go to the network so data is never stale.
-const CACHE = 'scrap-app-v3';
+const CACHE = 'scrap-app-v4';
 const SHELL = [
   '/', '/css/app.css', '/js/app.js', '/js/ui.js', '/js/i18n.js', '/js/rules.js',
   '/js/views/auth.js', '/js/views/customer.js', '/js/views/admin.js', '/js/views/partner.js', '/i18n/en.js',
-  '/icons/icon-192.png',
+  '/icons/icon-192.png', '/fonts/bricolage.woff2', '/fonts/bricolage-ext.woff2',
 ];
 
 self.addEventListener('install', (e) => {

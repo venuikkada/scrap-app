@@ -1,6 +1,6 @@
 import {
   api, html, render, state, busy, $, $$, toast, go,
-  money, qty, perUnit, dateLabel, addressLine, badge, catIcon,
+  money, qty, perUnit, dateLabel, addressLine, badge, catIcon, catEmoji, HERO_ART,
 } from '../ui.js';
 import { t } from '../i18n.js';
 import { computeAmounts, normaliseQty, istNow } from '../rules.js';
@@ -32,16 +32,18 @@ async function home() {
   const today = istNow().date;
   render(html`
     <section class="hero">
+      ${HERO_ART}
       <div class="hero-hi">${t('home.hello', { name: state.user.name || '' })} 👋</div>
-      <div class="hero-title">${t('home.heroTitle')}</div>
+      <div class="hero-title">${t('home.hero1')} <em>${t('home.hero2')}</em></div>
       <div class="hero-sub">${t('home.heroSub', { amount: money(cat.thresholdPaise) })}</div>
-      <a class="btn light" href="#/book">${t('home.book')}</a>
+      <a class="btn" href="#/book">${t('home.book')} →</a>
     </section>
 
     <h2>${t('home.rates')}</h2>
     <div class="strip">
       ${cat.categories.map(
-        (c) => html`<div class="rate-chip">${catIcon(c.key)}<b>${t('cat.' + c.key)}</b><span>${perUnit(c.buyPaise, c.unit)}</span></div>`
+        (c) => html`<div class="rate-chip c-${c.key}"><span class="emo" aria-hidden="true">${catEmoji(c.key)}</span><b>${t('cat.' + c.key)}</b>
+          <span class="price">${money(c.buyPaise)}<small>${t(c.unit === 'piece' ? 'unit.perPiece' : 'unit.perKg')}</small></span></div>`
       )}
     </div>
 
@@ -180,13 +182,13 @@ function stepItems(ctx) {
   render(html`
     ${stepHead(1)}
     <h1>${t('book.itemsTitle')}</h1>
-    <div class="card">
+    <div class="tiles">
       ${cat.categories.map((c) => {
         const piece = c.unit === 'piece';
-        return html`<div class="item">
-          ${catIcon(c.key)}
-          <div class="grow"><b>${t('cat.' + c.key)}</b>
-            <div class="small muted">${perUnit(c.buyPaise, c.unit)}</div></div>
+        return html`<div class="tile c-${c.key} ${draft.qty[c.id] > 0 ? 'has' : ''}" data-cat="${c.id}">
+          <span class="emo" aria-hidden="true">${catEmoji(c.key)}</span>
+          <b>${t('cat.' + c.key)}</b>
+          <span class="price">${perUnit(c.buyPaise, c.unit)}</span>
           <div class="stepper">
             <button type="button" data-step="-1" data-id="${c.id}" aria-label="${t('book.less')}">−</button>
             <input type="number" inputmode="${piece ? 'numeric' : 'decimal'}" min="0" step="${piece ? '1' : '0.5'}"
@@ -197,19 +199,20 @@ function stepItems(ctx) {
         </div>`;
       })}
     </div>
-    <div id="total" class="card"></div>
+    <div id="total" class="card" style="margin-top:14px"></div>
     <div class="sticky-total">
-      <div class="kv" id="mini"></div>
-      <button class="btn" id="next">${t('common.next')}</button>
+      <div class="bar">
+        <div class="grow"><div class="lbl">${t('book.youGet')}</div><div class="amt" id="mini"></div></div>
+        <button class="btn" id="next">${t('common.next')} →</button>
+      </div>
     </div>`);
 
   const byId = new Map(cat.categories.map((c) => [String(c.id), c]));
   const refresh = () => {
     $('#total').innerHTML = totalBox(cat).s;
     const has = draftLines(cat).length > 0;
-    $('#mini').innerHTML = has
-      ? html`<span>${t('book.youGet')}</span><span>${money(estimate(cat).customer)}</span>`.s
-      : '';
+    $('#mini').textContent = money(has ? estimate(cat).customer : 0);
+    $$('.tile').forEach((el) => el.classList.toggle('has', draft.qty[el.dataset.cat] > 0));
     $('#next').disabled = draftLines(cat).length === 0;
   };
   const setQty = (id, raw) => {
@@ -433,7 +436,7 @@ async function bookingDetail(id) {
           <div>${t('code.title')}</div>
           <div class="big">${money(b.proposed.customer)}</div>
           <p class="small">${t('code.hint')}</p>
-          <div class="code">${b.confirmCode}</div>
+          <div class="code" aria-label="${b.confirmCode}">${[...b.confirmCode].map((d) => html`<span>${d}</span>`)}</div>
           <p class="small muted">${t('code.warn')}</p>
         </div>`
       : ''}

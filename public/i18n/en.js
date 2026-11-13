@@ -17,8 +17,9 @@ export default {
   'common.refresh': 'Refresh',
 
   // login
-  'login.title': 'Welcome to {app}',
-  'login.subtitle': 'Sell your scrap from home in {city}. We come to your door.',
+  'login.tag1': 'Scrap in.',
+  'login.tag2': 'Cash out.',
+  'login.subtitle': 'Doorstep scrap pickup in {city}. Fair rates, honest weighing, paid on the spot.',
   'login.mobile': 'Mobile number',
   'login.mobileHint': 'We will send a 6-digit code (OTP) to this number.',
   'login.sendOtp': 'Send OTP',
@@ -51,7 +52,8 @@ export default {
 
   // customer home
   'home.hello': 'Hello {name}',
-  'home.heroTitle': 'Sell your scrap from home',
+  'home.hero1': 'Turn your scrap into',
+  'home.hero2': 'cash today.',
   'home.heroSub': 'Free pickup above {amount} · Paid at your door',
   'home.rates': "Today's rates",
   'how.t1': 'Tell us what you have',

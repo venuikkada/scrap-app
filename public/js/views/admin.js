@@ -37,9 +37,9 @@ async function dashboard() {
     <h1>${t('dash.title')}</h1>
     <p class="muted">${dateLabel(d.today, d.today)}</p>
     <div class="grid2">
-      ${stat(t('dash.todaysBookings'), d.todaysBookings, '📅', 'blue')}
+      ${stat(t('dash.todaysBookings'), d.todaysBookings, '📅')}
       ${stat(t('dash.completedToday'), d.completedToday, '✅')}
-      ${stat(t('dash.pickupValue'), money(d.pickupValueToday), '💰', 'amber')}
+      ${stat(t('dash.pickupValue'), money(d.pickupValueToday), '💰')}
       ${stat(t('dash.activePartners'), d.activePartners, '🛺')}
     </div>
     <h2>${t('dash.needsAction')}</h2>

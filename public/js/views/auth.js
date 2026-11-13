@@ -1,12 +1,13 @@
-import { api, html, render, state, busy, $, toastErr, errText, phone, ICON } from '../ui.js';
+import { api, html, render, state, busy, $, toastErr, errText, phone, ICON, HERO_ART } from '../ui.js';
 import { t } from '../i18n.js';
 
 export function login(onDone) {
   const test = state.app.testOtp;
   render(html`
     <div class="login-hero">
+      ${HERO_ART}
       <div class="login-logo">${ICON.logo}</div>
-      <h1>${t('login.title', { app: state.app.name })}</h1>
+      <h1>${t('login.tag1')}<br><em>${t('login.tag2')}</em></h1>
       <p>${t('login.subtitle', { city: state.app.city })}</p>
     </div>
     <form id="f" class="card login-card" novalidate>

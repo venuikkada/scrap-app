@@ -97,10 +97,19 @@ export const ICON = {
   pin: svg('<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.500C5 14.800 12 21 12 21z"/><circle cx="12" cy="9.500" r="2.500"/>'),
   truck: svg('<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7.500" cy="17.500" r="1.800"/><circle cx="17.500" cy="17.500" r="1.800"/>'),
   wallet: svg('<path d="M4 7h15a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h12"/><path d="M16 13h2"/>'),
-  logo: new Raw(`<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20.5 3.5v4h-4"/><path d="M9 9h6M9 12h6M10.5 9c2.6 0 2.6 3 0 3l3.2 4"/></svg>`),
+  logo: new Raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20.5 3.5v4h-4"/><path d="M9 9h6M9 12h6M10.5 9c2.6 0 2.6 3 0 3l3.2 4"/></svg>`),
 };
 const CAT_EMOJI = {
   newspaper: '📰', cardboard: '📦', books: '📚', plastic_bottles: '🧴', plastic_mixed: '🛍️',
   iron: '🔩', copper: '🔌', aluminium: '🥫', appliances: '📺', ewaste: '💻',
 };
-export const catIcon = (key) => html`<span class="ico" aria-hidden="true">${CAT_EMOJI[key] || '♻️'}</span>`;
+export const catEmoji = (key) => CAT_EMOJI[key] || '♻️';
+export const catIcon = (key) => html`<span class="ico c-${key}" aria-hidden="true">${catEmoji(key)}</span>`;
+// Decorative art for the dark hero blocks: a lime coin, rings and a spark.
+export const HERO_ART = new Raw(`<svg class="hero-art" viewBox="0 0 190 190" fill="none" aria-hidden="true">
+  <circle cx="118" cy="72" r="86" stroke="#1c3527" stroke-width="22"/>
+  <circle cx="118" cy="72" r="52" stroke="#2a4a37" stroke-width="2" stroke-dasharray="3 7"/>
+  <circle cx="126" cy="66" r="34" fill="#c9f24a"/>
+  <path d="M114 54h24M114 63h24M119 54c13 0 13 9 0 9l13 16" stroke="#0f2218" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M152 118l4 10 10 4-10 4-4 10-4-10-10-4 10-4z" fill="#ffd35c"/>
+  <circle cx="84" cy="24" r="5" fill="#ff6a48"/></svg>`);

@@ -27,8 +27,8 @@ function chrome(path) {
   document.body.classList.toggle('has-nav', showNav);
   if (showNav)
     $nav.innerHTML = html`${nav.map(
-      ([href, key, icon]) => html`<a href="#${href}" class="${href === path ? 'on' : ''}">
-        <span class="nav-ico">${ICON[icon]}</span>${t(key)}</a>`
+      ([href, key, icon]) => html`<a href="#${href}" aria-label="${t(key)}" class="${href === path ? 'on' : ''}">
+        ${ICON[icon]}<span class="nav-label">${t(key)}</span></a>`
     )}`.s;
   $tabs.hidden = !tabs;
   if (tabs) {

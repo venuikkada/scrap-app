@@ -17,11 +17,13 @@ const MIME = {
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 const SECURITY_HEADERS = {
   'Content-Security-Policy':
-    "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
+    "default-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; object-src 'none'; base-uri 'none'; frame-ancestors 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
 };
@@ -43,8 +45,8 @@ export function createServer(overrides = {}) {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#f4f6f4',
-    theme_color: '#1b7f3b',
+    background_color: '#f8f4e6',
+    theme_color: '#f8f4e6',
     lang: 'en-IN',
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },

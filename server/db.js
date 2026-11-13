@@ -131,8 +131,24 @@ export function openDb(dbPath) {
   const db = new DatabaseSync(dbPath);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
+  migrate(db);
   seed(db);
   return db;
+}
+
+// Adds columns introduced after Phase 1 to databases created earlier.
+function migrate(db) {
+  const cols = new Set(db.prepare('PRAGMA table_info(bookings)').all().map((c) => c.name));
+  const add = (name, def) => {
+    if (!cols.has(name)) db.exec(`ALTER TABLE bookings ADD COLUMN ${name} ${def}`);
+  };
+  add('weighed_at', 'TEXT'); // when the partner entered measured weights
+  add('confirm_code', 'TEXT'); // 4-digit code the customer gives to accept the amount
+  add('confirm_attempts', 'INTEGER NOT NULL DEFAULT 0');
+  add('rating', 'INTEGER');
+  add('rating_comment', 'TEXT');
+  add('rated_at', 'TEXT');
+  db.exec('CREATE INDEX IF NOT EXISTS bookings_partner ON bookings(partner_id, pickup_date)');
 }
 
 function seed(db) {

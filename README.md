@@ -1,4 +1,4 @@
-# Scrap Pickup (Phase 1)
+# Scrap Pickup
 
 A mobile-friendly web app (PWA) for doorstep scrap pickup. Customers book a pickup, the admin sets
 rates, approves partners and manages bookings. It installs from the browser on Android - no Play Store.
@@ -68,7 +68,8 @@ Pickup fee, free-pickup threshold, partner share and service PIN codes are in th
 ## 7. Before real customers use it
 
 - **Real OTP by SMS is not connected yet.** Pick an SMS provider (for example MSG91 or Fast2SMS), finish
-  DLT registration, add their API call in `server/sms.js`, then set `OTP_MODE=sms`.
+  DLT registration, add their API call in `server/sms.js`, then set `OTP_MODE=sms`. The same file also
+  sends the pickup confirmation code by SMS; until then the customer reads the code from the app.
 - Test mode lets anyone log in as anyone (including you, the admin). The app refuses to start with
   `NODE_ENV=production` and `OTP_MODE=test` unless you also set `ALLOW_TEST_OTP=1` for a private trial.
 - Set `COOKIE_SECURE=1`, and `TRUST_PROXY=1` if your host puts the app behind a proxy.
@@ -90,17 +91,25 @@ For manual testing on a phone follow [TESTING.md](TESTING.md). Things to confirm
 |---|---|
 | `public/i18n/en.js` | **All app text.** Copy to `te.js` and translate to add Telugu. |
 | `public/js/rules.js` | Pricing, pickup fee, slots and date rules (used by both server and phone). |
-| `public/js/views/` | Screens: `auth.js`, `customer.js`, `admin.js`. |
+| `public/js/views/` | Screens: `auth.js`, `customer.js`, `partner.js`, `admin.js`. |
 | `server/api.js` | All server actions and permission checks. |
 | `server/db.js` | Database tables and starting data. |
 | `server/sms.js` | Where the SMS provider gets plugged in. |
 | `scripts/add-admin.js` | Creates an admin. |
 
-## What is in Phase 1
+## What is built
 
-Login with mobile + OTP, role choice, partner approval, addresses, booking with live estimate,
-date and slot, status tracking, booking detail, and the admin dashboard, rates, bookings, partners,
-customers and settings.
+**Phase 1** - login with mobile + OTP, role choice, partner approval, addresses, booking with live
+estimate, date and slot, status tracking, booking detail, and the admin dashboard, rates, bookings,
+partners, customers and settings.
 
-Not built yet (Phase 2 and 3): partner pickup screens, door-step code confirmation, partner earnings,
-ratings, monthly plan, CSV export, online payments.
+**Phase 2** - partner screens:
+- **My pickups**: the day's assigned pickups in route order (time slot, then PIN code, then locality), with a Google Maps link and a Call button.
+- **Pickup flow**: Start (on the way) → enter measured weights → the app works out the amount → the customer sees the amount and a **4-digit code** in their app → partner types the code → pays by **cash or UPI** and marks it paid.
+- **Earnings**: today's earning, cash and UPI paid out, last 7 days, average rating.
+- **Customer rating**: 1-5 stars and a comment after each pickup. Admin sees it on the booking and on the Partners page.
+- **Privacy**: a partner gets the customer's phone number only on the pickup day, and only for pickups assigned to them.
+
+The admin can still move a booking by hand (without the customer code) if a partner cannot use the app.
+
+Not built yet (Phase 3): monthly plan, CSV export, online payments.

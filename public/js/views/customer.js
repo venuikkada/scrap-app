@@ -349,7 +349,7 @@ export function statusSteps(status) {
 }
 
 export function itemsTable(b) {
-  const measured = b.final != null;
+  const measured = (b.final || b.proposed) != null;
   return html`<table>
     <tr><th>${t('detail.item')}</th>
       <th class="num">${t(measured ? 'detail.measured' : 'detail.estQty')}</th>
@@ -365,7 +365,7 @@ export function itemsTable(b) {
 }
 
 export function amountsBox(b) {
-  const f = b.final;
+  const f = b.final || b.proposed;
   return html`
     <div class="kv"><span>${t('detail.estValue')}</span><span>${money(b.est.value)}</span></div>
     ${f
@@ -382,11 +382,55 @@ export function amountsBox(b) {
     ${f ? '' : html`<div class="small muted">${t('book.finalNote')}</div>`}`;
 }
 
+export const stars = (n) => html`<div class="stars" aria-label="${String(n)} / 5">${'★'.repeat(n)}<span class="off">${'★'.repeat(5 - n)}</span></div>`;
+
+// While a pickup is in progress the page checks for news every 20 seconds,
+// so the confirmation code appears without the customer doing anything.
+let pollTimer;
+window.addEventListener('hashchange', () => clearInterval(pollTimer));
+const fingerprint = (b) => JSON.stringify([b.status, b.partnerName, b.proposed, b.confirmCode]);
+
 async function bookingDetail(id) {
+  clearInterval(pollTimer);
   const { booking: b } = await api('GET', '/bookings/' + id);
+  if (['requested', 'assigned', 'on_the_way', 'picked_up'].includes(b.status)) {
+    const hash = location.hash;
+    pollTimer = setInterval(async () => {
+      if (location.hash !== hash || !state.user) return clearInterval(pollTimer);
+      try {
+        const fresh = (await api('GET', '/bookings/' + id)).booking;
+        if (fingerprint(fresh) !== fingerprint(b) && location.hash === hash) bookingDetail(id);
+      } catch { /* try again next time */ }
+    }, 20000);
+  }
+  const canRate = ['picked_up', 'paid'].includes(b.status) && !b.rating;
   const canCancel = ['requested', 'assigned'].includes(b.status);
   render(html`
     <h1>${t('common.bookingNo', { id: String(b.id) })}</h1>
+    ${b.proposed
+      ? html`<div class="card codebox">
+          <div>${t('code.title')}</div>
+          <div class="big">${money(b.proposed.customer)}</div>
+          <p class="small">${t('code.hint')}</p>
+          <div class="code">${b.confirmCode}</div>
+          <p class="small muted">${t('code.warn')}</p>
+        </div>`
+      : ''}
+    ${canRate
+      ? html`<form class="card" id="rate" novalidate>
+          <b>${t('rate.title')}</b>
+          <div class="star-pick">
+            ${[1, 2, 3, 4, 5].map(
+              (n) => html`<label><input type="radio" name="stars" value="${String(n)}"><span aria-label="${String(n)}">★</span></label>`
+            )}
+          </div>
+          <label for="comment">${t('rate.comment')}</label>
+          <input id="comment" maxlength="300">
+          <button class="btn" style="margin-top:10px" disabled>${t('rate.submit')}</button>
+        </form>`
+      : ''}
+    ${b.rating ? html`<div class="card"><div class="small muted">${t('rate.yours')}</div>${stars(b.rating.stars)}
+      ${b.rating.comment ? html`<div>${b.rating.comment}</div>` : ''}</div>` : ''}
     <div class="card">${statusSteps(b.status)}</div>
     <div class="card">
       <div class="kv"><span>${t('book.date')}</span><b>${dateLabel(b.pickupDate, istNow().date)}</b></div>
@@ -399,6 +443,26 @@ async function bookingDetail(id) {
     <div class="card">${amountsBox(b)}</div>
     ${canCancel ? html`<button class="btn danger" id="cancel">${t('detail.cancel')}</button>` : ''}
     <a class="btn alt" href="#/" style="margin-top:10px">${t('common.back')}</a>`);
+  if (canRate) {
+    const f = $('#rate');
+    const paint = () => {
+      const n = Number(($('input[name=stars]:checked', f) || {}).value || 0);
+      $$('.star-pick label', f).forEach((l, i) => l.classList.toggle('on', i < n));
+      $('button', f).disabled = n === 0;
+    };
+    $$('input[name=stars]', f).forEach((r) => (r.onchange = paint));
+    f.onsubmit = (ev) => {
+      ev.preventDefault();
+      busy($('button', f), async () => {
+        await api('POST', `/bookings/${b.id}/rating`, {
+          stars: Number($('input[name=stars]:checked', f).value),
+          comment: $('#comment').value,
+        });
+        toast(t('rate.thanks'));
+        bookingDetail(id);
+      });
+    };
+  }
   if (canCancel)
     $('#cancel').onclick = (ev) => {
       if (!confirm(t('detail.confirmCancel'))) return;

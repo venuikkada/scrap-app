@@ -192,6 +192,111 @@ test('full flow: book -> assign -> on the way -> picked up -> paid', async () =>
   assert.equal((await cust.login('9000000012')).data.error, 'blocked');
 });
 
+test('phase 2: partner pickup with customer code, payment, earnings, rating, privacy', async () => {
+  makeAdmin('9000000020');
+  const admin = client();
+  await admin.login('9000000020');
+  const mk = async (mobile, role, name) => {
+    const c = client();
+    await c.login(mobile);
+    await c('POST', '/me/role', { role, name });
+    return c;
+  };
+  const raju = await mk('9000000021', 'partner', 'Raju');
+  const other = await mk('9000000022', 'partner', 'Other Partner');
+  const cust = await mk('9000000023', 'customer', 'Sita');
+  for (const u of (await admin('GET', '/admin/users?role=partner')).data.users)
+    if (u.status === 'pending') await admin('POST', `/admin/users/${u.id}/status`, { status: 'approved' });
+  const rajuId = app.db.prepare("SELECT id FROM users WHERE mobile = '9000000021'").get().id;
+
+  const cat = (await cust('GET', '/catalog')).data;
+  const iron = cat.categories.find((c) => c.key === 'iron');
+  const addr = (await cust('POST', '/addresses', ADDRESS)).data;
+  const today = bookableDates()[0].date;
+  const tomorrow = bookableDates()[1].date;
+  const book = async (date) =>
+    (await cust('POST', '/bookings', { addressId: addr.id, date, slot: 'evening', items: [{ categoryId: iron.id, qty: 10 }] })).data.id;
+
+  // booking for tomorrow: partner sees the address but NOT the phone number
+  const later = await book(tomorrow);
+  await admin('POST', `/admin/bookings/${later}/assign`, { partnerId: rajuId });
+  let list = (await raju('GET', '/partner/pickups?date=' + tomorrow)).data;
+  assert.equal(list.pickups.length, 1);
+  assert.equal(list.pickups[0].customer.name, 'Sita');
+  assert.equal(list.pickups[0].customer.mobile, null);
+  assert.equal(list.pickups[0].est.margin, undefined);
+  assert.equal(list.pickups[0].items, undefined);
+  assert.equal((await raju('POST', `/partner/pickups/${later}/on-the-way`, {})).data.error, 'not_today');
+  // another partner and a customer cannot see it
+  assert.equal((await other('GET', '/partner/pickups/' + later)).status, 404);
+  assert.equal((await other('GET', '/partner/pickups?date=' + tomorrow)).data.pickups.length, 0);
+  assert.equal((await cust('GET', '/partner/pickups')).status, 403);
+
+  // a booking for today (put straight into the database: today's slots may already be over)
+  const id = await book(tomorrow);
+  app.db.prepare('UPDATE bookings SET pickup_date = ? WHERE id = ?').run(today, id);
+  await admin('POST', `/admin/bookings/${id}/assign`, { partnerId: rajuId });
+  list = (await raju('GET', '/partner/pickups')).data;
+  assert.equal(list.pickups[0].customer.mobile, '9000000023');
+
+  const p = (path, body = {}) => raju('POST', `/partner/pickups/${id}/${path}`, body);
+  assert.equal((await p('weigh', { items: [] })).data.error, 'wrong_status');
+  assert.equal((await p('on-the-way')).status, 200);
+  assert.equal((await p('confirm', { code: '0000' })).data.error, 'wrong_status');
+
+  const itemId = (await raju('GET', '/partner/pickups/' + id)).data.pickup.items[0].id;
+  // The earlier test left the settings at: fee Rs 30, free from Rs 500, partner share 40%.
+  // 9 kg iron x Rs 28 = Rs 252, minus Rs 30 fee = Rs 222
+  assert.equal((await p('weigh', { items: [{ id: itemId, qty: 9 }] })).status, 200);
+  let seen = (await cust('GET', '/bookings/' + id)).data.booking;
+  assert.equal(seen.status, 'on_the_way');
+  assert.equal(seen.final, null);
+  assert.equal(seen.proposed.customer, 22200);
+  assert.match(seen.confirmCode, /^\d{4}$/);
+  // the code is never sent to the partner or the admin
+  assert.equal((await raju('GET', '/partner/pickups/' + id)).data.pickup.confirmCode, undefined);
+  assert.equal((await admin('GET', '/admin/bookings/' + id)).data.booking.confirmCode, undefined);
+
+  const wrong = seen.confirmCode === '1111' ? '2222' : '1111';
+  assert.equal((await p('confirm', { code: wrong })).data.error, 'code_wrong');
+  assert.equal((await p('pay', { mode: 'cash' })).data.error, 'wrong_status');
+  // re-weighing gives a new amount; 5 wrong tries lock the code
+  assert.equal((await p('weigh', { items: [{ id: itemId, qty: 9.5 }] })).status, 200);
+  for (let i = 0; i < 5; i++) await p('confirm', { code: 'xxxx' });
+  seen = (await cust('GET', '/bookings/' + id)).data.booking;
+  assert.equal((await p('confirm', { code: seen.confirmCode })).data.error, 'code_locked');
+  assert.equal((await p('weigh', { items: [{ id: itemId, qty: 9.5 }] })).status, 200);
+  seen = (await cust('GET', '/bookings/' + id)).data.booking;
+  assert.equal(seen.proposed.customer, 23600);
+  assert.equal((await cust('POST', `/bookings/${id}/rating`, { stars: 5 })).data.error, 'wrong_status');
+  assert.equal((await p('confirm', { code: seen.confirmCode })).status, 200);
+  assert.equal((await p('pay', { mode: 'cash' })).status, 200);
+
+  seen = (await cust('GET', '/bookings/' + id)).data.booking;
+  assert.equal(seen.status, 'paid');
+  assert.equal(seen.final.customer, 23600);
+  assert.equal(seen.confirmCode, undefined);
+
+  // rating: once, 1-5 stars
+  assert.equal((await cust('POST', `/bookings/${id}/rating`, { stars: 9 })).data.error, 'invalid_rating');
+  assert.equal((await cust('POST', `/bookings/${id}/rating`, { stars: 4, comment: 'On time' })).status, 200);
+  assert.equal((await cust('POST', `/bookings/${id}/rating`, { stars: 1 })).data.error, 'already_rated');
+
+  // earnings: resale 9.5 x 33 = 313.50; earning 313.50 - 266 + 30 fee = 77.50; partner 40% = 31
+  const e = (await raju('GET', '/partner/earnings')).data;
+  assert.equal(e.days.length, 7);
+  assert.deepEqual(e.days[0], { date: today, pickups: 1, payout: 3100, cash: 23600, upi: 0, unpaid: 0 });
+  assert.deepEqual(e.rating, { avg: 4, count: 1 });
+  assert.equal((await other('GET', '/partner/earnings')).data.days[0].pickups, 0);
+  const row = (await admin('GET', '/admin/users?role=partner')).data.users.find((u) => u.id === rajuId);
+  assert.equal(row.rating, 4);
+
+  // re-assigning takes the booking away from the first partner
+  const otherId = app.db.prepare("SELECT id FROM users WHERE mobile = '9000000022'").get().id;
+  await admin('POST', `/admin/bookings/${later}/assign`, { partnerId: otherId });
+  assert.equal((await raju('GET', '/partner/pickups/' + later)).status, 404);
+});
+
 test('requests without JSON content type are refused (CSRF guard)', async () => {
   const res = await fetch(base + '/api/auth/logout', { method: 'POST', body: 'x=1', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
   assert.equal(res.status, 415);

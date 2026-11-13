@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { getSettings, transaction } from './db.js';
-import { sendOtpSms } from './sms.js';
-import { SLOTS, bookableDates, computeAmounts, istNow, normaliseQty } from '../public/js/rules.js';
+import { sendConfirmCodeSms, sendOtpSms } from './sms.js';
+import { SLOTS, addDays, bookableDates, computeAmounts, istNow, normaliseQty } from '../public/js/rules.js';
 
 export class HttpError extends Error {
   constructor(status, code) {
@@ -18,6 +18,7 @@ const OTP_MAX_SENDS = 5;
 const OTP_MAX_ATTEMPTS = 5;
 const MAX_OPEN_BOOKINGS = 5;
 const MAX_ADDRESSES = 10;
+const CONFIRM_MAX_ATTEMPTS = 5;
 
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const bad = (code) => new HttpError(400, code);
@@ -108,8 +109,19 @@ export function createApi(db, cfg) {
     return b;
   }
 
-  // What a customer may see. Admins additionally get resale, payout and margin.
-  function bookingView(b, admin = false) {
+  // who = 'customer' | 'partner' | 'admin'. Each role only gets what it may see:
+  // customers never see payout or margin, partners never see margin or resale price.
+  function bookingView(b, who = 'customer') {
+    const admin = who === 'admin';
+    const done = ['picked_up', 'paid'].includes(b.status);
+    // weighed = partner entered weights, waiting for the customer's confirmation code
+    const weighed = b.status === 'on_the_way' && b.weighed_at != null && b.final_value != null;
+    const amounts = (p) => {
+      const a = { value: b[p + '_value'], fee: b[p + '_fee'], customer: b[p + '_customer'] };
+      if (who !== 'customer') a.payout = b[p + '_payout'];
+      if (admin) a.margin = b[p + '_margin'];
+      return a;
+    };
     const v = {
       id: b.id,
       status: b.status,
@@ -121,12 +133,17 @@ export function createApi(db, cfg) {
       createdAt: b.created_at,
       feePaise: b.fee_paise,
       thresholdPaise: b.threshold_paise,
-      est: { value: b.est_value, fee: b.est_fee, customer: b.est_customer },
-      final:
-        b.final_value == null
-          ? null
-          : { value: b.final_value, fee: b.final_fee, customer: b.final_customer },
+      est: amounts('est'),
+      final: done ? amounts('final') : null,
+      proposed: weighed ? amounts('final') : null,
+      rating: b.rating ? { stars: b.rating, comment: b.rating_comment || '' } : null,
     };
+    if (who === 'customer' && weighed) v.confirmCode = b.confirm_code;
+    if (who === 'partner') {
+      // Privacy: the partner gets the customer's phone number only on the pickup day.
+      const today = istNow(now()).date;
+      v.customer = { name: b.customer_name, mobile: b.pickup_date === today ? b.customer_mobile : null };
+    }
     if (b.items) {
       v.items = b.items.map((i) => {
         const item = {
@@ -134,7 +151,7 @@ export function createApi(db, cfg) {
           key: i.key,
           unit: i.unit,
           estQty: i.est_qty,
-          measuredQty: i.measured_qty,
+          measuredQty: done || weighed ? i.measured_qty : null,
           buyPaise: i.buy_paise,
         };
         if (admin) item.resalePaise = i.resale_paise;
@@ -144,12 +161,6 @@ export function createApi(db, cfg) {
     if (admin) {
       v.customer = { id: b.customer_id, name: b.customer_name, mobile: b.customer_mobile };
       v.partnerId = b.partner_id;
-      v.est.payout = b.est_payout;
-      v.est.margin = b.est_margin;
-      if (v.final) {
-        v.final.payout = b.final_payout;
-        v.final.margin = b.final_margin;
-      }
     }
     return v;
   }
@@ -460,6 +471,167 @@ export function createApi(db, cfg) {
     return { ok: true };
   });
 
+  // Stores measured quantities and the final amounts worked out from the rates saved on the booking.
+  function saveMeasured(b, body, { status, code }) {
+    const given = new Map(
+      (Array.isArray(body.items) ? body.items : []).map((x) => [Number(x && x.id), x.qty])
+    );
+    const lines = b.items.map((i) => {
+      const raw = given.get(i.id);
+      // 0 is allowed here: the partner may not take an item after all.
+      const qty = Number(raw) === 0 && raw !== '' && raw != null ? 0 : normaliseQty(i.unit, raw);
+      if (qty == null) throw bad('invalid_qty');
+      return { id: i.id, qty, buyPaise: i.buy_paise, resalePaise: i.resale_paise };
+    });
+    if (lines.every((l) => l.qty === 0)) throw bad('invalid_qty');
+    const f = computeAmounts(lines, termsOf(b));
+    const t = iso();
+    transaction(db, () => {
+      const upd = db.prepare('UPDATE booking_items SET measured_qty = ? WHERE id = ?');
+      for (const l of lines) upd.run(l.qty, l.id);
+      db.prepare(
+        `UPDATE bookings SET status = ?, weighed_at = ?, picked_up_at = ?, confirm_code = ?,
+           confirm_attempts = 0, final_value = ?, final_fee = ?, final_customer = ?,
+           final_payout = ?, final_margin = ? WHERE id = ?`
+      ).run(status, t, status === 'picked_up' ? t : null, code, f.value, f.fee, f.customer, f.payout, f.margin, b.id);
+    });
+    return f;
+  }
+
+  // ---------- customer: rating ----------
+  add('POST', '/api/bookings/:id/rating', 'customer', ({ user, params, body }) => {
+    const b = ownBooking(user, params.id);
+    if (!['picked_up', 'paid'].includes(b.status)) throw bad('wrong_status');
+    if (b.rating) throw bad('already_rated');
+    const stars = Number(body.stars);
+    if (!Number.isInteger(stars) || stars < 1 || stars > 5) throw bad('invalid_rating');
+    const comment = text(body.comment, 300, false);
+    db.prepare('UPDATE bookings SET rating = ?, rating_comment = ?, rated_at = ? WHERE id = ?').run(
+      stars, comment, iso(), b.id
+    );
+    return { ok: true };
+  });
+
+  // ---------- partner ----------
+  const slotRank = Object.fromEntries(SLOTS.map((s, i) => [s.id, i]));
+
+  add('GET', '/api/partner/pickups', 'partner', ({ user, query }) => {
+    const dates = bookableDates(now()).map((d) => d.date);
+    const date = query.get('date') || dates[0];
+    if (!dates.includes(date)) throw bad('invalid_input');
+    const rows = db
+      .prepare(
+        `SELECT b.*, cu.name AS customer_name, cu.mobile AS customer_mobile
+         FROM bookings b JOIN users cu ON cu.id = b.customer_id
+         WHERE b.partner_id = ? AND b.pickup_date = ? AND b.status != 'cancelled'`
+      )
+      .all(user.id, date)
+      .map((b) => bookingView(b, 'partner'));
+    // Simple route order: by time slot, then PIN code, then locality (nearby homes together).
+    rows.sort(
+      (a, b) =>
+        slotRank[a.slot] - slotRank[b.slot] ||
+        a.address.pin.localeCompare(b.address.pin) ||
+        a.address.locality.localeCompare(b.address.locality) ||
+        a.id - b.id
+    );
+    return { date, today: dates[0], dates: dates.slice(0, 3), pickups: rows };
+  });
+
+  // A partner can only open bookings currently assigned to them.
+  const ownPickup = (user, id) => {
+    const b = loadBooking(idOf(id));
+    if (b.partner_id !== user.id || b.status === 'cancelled') throw new HttpError(404, 'not_found');
+    return b;
+  };
+  const mustBeToday = (b) => {
+    if (b.pickup_date !== istNow(now()).date) throw bad('not_today');
+  };
+
+  add('GET', '/api/partner/pickups/:id', 'partner', ({ user, params }) => ({
+    pickup: bookingView(ownPickup(user, params.id), 'partner'),
+    today: istNow(now()).date,
+  }));
+
+  add('POST', '/api/partner/pickups/:id/on-the-way', 'partner', ({ user, params }) => {
+    const b = ownPickup(user, params.id);
+    if (b.status !== 'assigned') throw bad('wrong_status');
+    mustBeToday(b);
+    db.prepare("UPDATE bookings SET status = 'on_the_way' WHERE id = ?").run(b.id);
+    return { ok: true };
+  });
+
+  // Partner enters measured weights. The customer then sees the amount and a 4-digit code
+  // in their app (and by SMS once a provider is connected) and tells the code to the partner.
+  add('POST', '/api/partner/pickups/:id/weigh', 'partner', async ({ user, params, body }) => {
+    const b = ownPickup(user, params.id);
+    if (b.status !== 'on_the_way') throw bad('wrong_status');
+    mustBeToday(b);
+    const code = String(crypto.randomInt(0, 10000)).padStart(4, '0');
+    const f = saveMeasured(b, body, { status: 'on_the_way', code });
+    if (cfg.otpMode === 'sms') {
+      try {
+        await sendConfirmCodeSms(b.customer_mobile, code, f.customer / 100);
+      } catch {
+        /* the code is still visible in the customer's app */
+      }
+    }
+    return { ok: true };
+  });
+
+  add('POST', '/api/partner/pickups/:id/confirm', 'partner', ({ user, params, body }) => {
+    const b = ownPickup(user, params.id);
+    if (b.status !== 'on_the_way' || !b.confirm_code) throw bad('wrong_status');
+    if (b.confirm_attempts >= CONFIRM_MAX_ATTEMPTS) throw bad('code_locked');
+    const given = sha256(String(body.code ?? '').trim());
+    if (!crypto.timingSafeEqual(Buffer.from(given), Buffer.from(sha256(b.confirm_code)))) {
+      db.prepare('UPDATE bookings SET confirm_attempts = confirm_attempts + 1 WHERE id = ?').run(b.id);
+      throw bad('code_wrong');
+    }
+    db.prepare(
+      "UPDATE bookings SET status = 'picked_up', picked_up_at = ?, confirm_code = NULL WHERE id = ?"
+    ).run(iso(), b.id);
+    return { ok: true };
+  });
+
+  add('POST', '/api/partner/pickups/:id/pay', 'partner', ({ user, params, body }) => {
+    const b = ownPickup(user, params.id);
+    if (b.status !== 'picked_up') throw bad('wrong_status');
+    if (!['cash', 'upi'].includes(body.mode)) throw bad('invalid_input');
+    db.prepare("UPDATE bookings SET status = 'paid', payment_mode = ?, paid_at = ? WHERE id = ?").run(
+      body.mode, iso(), b.id
+    );
+    return { ok: true };
+  });
+
+  // Earnings for today and the last 7 days (by the India date of the pickup).
+  add('GET', '/api/partner/earnings', 'partner', ({ user }) => {
+    const today = istNow(now()).date;
+    const days = [];
+    for (let i = 0; i < 7; i++)
+      days.push({ date: addDays(today, -i), pickups: 0, payout: 0, cash: 0, upi: 0, unpaid: 0 });
+    const byDate = new Map(days.map((d) => [d.date, d]));
+    const from = new Date(days[6].date + 'T00:00:00+05:30').toISOString();
+    const rows = db
+      .prepare(
+        `SELECT picked_up_at, status, payment_mode, final_customer, final_payout FROM bookings
+         WHERE partner_id = ? AND status IN ('picked_up','paid') AND picked_up_at >= ?`
+      )
+      .all(user.id, from);
+    for (const r of rows) {
+      const d = byDate.get(istNow(new Date(r.picked_up_at)).date);
+      if (!d) continue;
+      d.pickups += 1;
+      d.payout += r.final_payout;
+      if (r.status === 'paid') d[r.payment_mode] += r.final_customer;
+      else d.unpaid += r.final_customer;
+    }
+    const rating = db
+      .prepare('SELECT AVG(rating) AS avg, COUNT(rating) AS n FROM bookings WHERE partner_id = ?')
+      .get(user.id);
+    return { today, days, rating: { avg: rating.avg, count: rating.n } };
+  });
+
   // ---------- admin ----------
   add('GET', '/api/admin/dashboard', 'admin', () => {
     const today = istNow(now()).date;
@@ -547,7 +719,7 @@ export function createApi(db, cfg) {
          ORDER BY b.pickup_date DESC, CASE b.slot ${order} END, b.id DESC LIMIT 300`
       )
       .all(...args);
-    return { bookings: rows.map((b) => bookingView(b, true)) };
+    return { bookings: rows.map((b) => bookingView(b, 'admin')) };
   });
 
   const approvedPartners = () =>
@@ -558,7 +730,7 @@ export function createApi(db, cfg) {
       .all();
 
   add('GET', '/api/admin/bookings/:id', 'admin', ({ params }) => ({
-    booking: bookingView(loadBooking(idOf(params.id)), true),
+    booking: bookingView(loadBooking(idOf(params.id)), 'admin'),
     partners: approvedPartners(),
   }));
 
@@ -586,26 +758,8 @@ export function createApi(db, cfg) {
   add('POST', '/api/admin/bookings/:id/pickup', 'admin', ({ params, body }) => {
     const b = loadBooking(idOf(params.id));
     if (!['assigned', 'on_the_way'].includes(b.status)) throw bad('wrong_status');
-    const given = new Map(
-      (Array.isArray(body.items) ? body.items : []).map((x) => [Number(x && x.id), x.qty])
-    );
-    const lines = b.items.map((i) => {
-      const raw = given.get(i.id);
-      // 0 is allowed here: the partner may not take an item after all.
-      const qty = Number(raw) === 0 && raw !== '' && raw != null ? 0 : normaliseQty(i.unit, raw);
-      if (qty == null) throw bad('invalid_qty');
-      return { id: i.id, qty, buyPaise: i.buy_paise, resalePaise: i.resale_paise };
-    });
-    if (lines.every((l) => l.qty === 0)) throw bad('invalid_qty');
-    const f = computeAmounts(lines, termsOf(b));
-    transaction(db, () => {
-      const upd = db.prepare('UPDATE booking_items SET measured_qty = ? WHERE id = ?');
-      for (const l of lines) upd.run(l.qty, l.id);
-      db.prepare(
-        `UPDATE bookings SET status = 'picked_up', picked_up_at = ?, final_value = ?, final_fee = ?,
-           final_customer = ?, final_payout = ?, final_margin = ? WHERE id = ?`
-      ).run(iso(), f.value, f.fee, f.customer, f.payout, f.margin, b.id);
-    });
+    // Admin override (no customer code needed), e.g. when the partner's phone is not working.
+    saveMeasured(b, body, { status: 'picked_up', code: null });
     return { ok: true };
   });
 
@@ -640,7 +794,9 @@ export function createApi(db, cfg) {
         .prepare(
           `SELECT u.id, u.name, u.mobile, u.status, u.created_at AS createdAt,
              (SELECT COUNT(*) FROM bookings b WHERE b.${col} = u.id AND b.status != 'cancelled') AS bookings,
-             (SELECT COUNT(*) FROM bookings b WHERE b.${col} = u.id AND b.status IN ('picked_up','paid')) AS completed
+             (SELECT COUNT(*) FROM bookings b WHERE b.${col} = u.id AND b.status IN ('picked_up','paid')) AS completed,
+             (SELECT AVG(rating) FROM bookings b WHERE b.${col} = u.id) AS rating,
+             (SELECT COUNT(rating) FROM bookings b WHERE b.${col} = u.id) AS ratings
            FROM users u WHERE u.role = ?
            ORDER BY CASE u.status WHEN 'pending' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, u.id DESC
            LIMIT 500`

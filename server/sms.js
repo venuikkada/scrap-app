@@ -9,3 +9,12 @@ export async function sendOtpSms(mobile, code) {
   void code;
   throw new Error('sms_not_configured');
 }
+
+// Sends the 4-digit pickup confirmation code (also shown to the customer inside the app,
+// so the flow works even before an SMS provider is connected).
+export async function sendConfirmCodeSms(mobile, code, amountRupees) {
+  void mobile;
+  void code;
+  void amountRupees;
+  throw new Error('sms_not_configured');
+}

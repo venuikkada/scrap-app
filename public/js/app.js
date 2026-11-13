@@ -3,6 +3,7 @@ import { t } from './i18n.js';
 import * as auth from './views/auth.js';
 import * as customer from './views/customer.js';
 import * as admin from './views/admin.js';
+import * as partner from './views/partner.js';
 
 const $tabs = document.getElementById('tabs');
 const $logout = document.getElementById('logout');
@@ -11,7 +12,8 @@ function chrome(path) {
   const u = state.user;
   $logout.hidden = !u;
   $logout.textContent = t('common.logout');
-  const tabs = u && u.role === 'admin' && u.status === 'approved' ? admin.tabs : null;
+  const ok = u && u.status === 'approved';
+  const tabs = ok && u.role === 'admin' ? admin.tabs : ok && u.role === 'partner' ? partner.tabs : null;
   $tabs.hidden = !tabs;
   if (tabs) {
     $tabs.innerHTML = html`${tabs.map(
@@ -29,8 +31,8 @@ async function route() {
   chrome(path);
   if (!u) return auth.login(route);
   if (!u.role) return auth.chooseRole(route);
-  if (u.role === 'partner') return auth.partnerHome();
-  const table = u.role === 'admin' ? admin.routes : customer.routes;
+  if (u.role === 'partner' && u.status !== 'approved') return auth.partnerHome(route);
+  const table = { admin: admin.routes, partner: partner.routes }[u.role] || customer.routes;
   for (const [re, view] of table) {
     const m = re.exec(path);
     if (!m) continue;

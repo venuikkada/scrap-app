@@ -101,23 +101,16 @@ export function chooseRole(onDone) {
   };
 }
 
-// Phase 1: partners only see their approval status. Pickup screens come in Phase 2.
-export function partnerHome() {
-  const u = state.user;
-  const pending = u.status === 'pending';
+// Shown to partners until the admin approves them.
+export function partnerHome(onApproved) {
   render(html`
-    <h1>${t('partner.hello', { name: u.name || '' })}</h1>
-    <div class="notice ${pending ? '' : 'ok'}">
-      <b>${t(pending ? 'partner.pendingTitle' : 'partner.approvedTitle')}</b><br>
-      ${t(pending ? 'partner.pendingText' : 'partner.approvedText')}
-    </div>
-    ${pending ? html`<button class="btn alt" id="check">${t('partner.checkAgain')}</button>` : ''}`);
-  const check = $('#check');
-  if (check)
-    check.onclick = async () => {
-      try {
-        state.user = (await api('GET', '/bootstrap')).user;
-        if (state.user) partnerHome();
-      } catch (e) { toastErr(e); }
-    };
+    <h1>${t('partner.hello', { name: state.user.name || '' })}</h1>
+    <div class="notice"><b>${t('partner.pendingTitle')}</b><br>${t('partner.pendingText')}</div>
+    <button class="btn alt" id="check">${t('partner.checkAgain')}</button>`);
+  $('#check').onclick = async () => {
+    try {
+      state.user = (await api('GET', '/bootstrap')).user;
+      if (state.user) onApproved();
+    } catch (e) { toastErr(e); }
+  };
 }

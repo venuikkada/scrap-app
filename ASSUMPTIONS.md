@@ -25,8 +25,8 @@
 15. There is **no limit on bookings per slot**. If you have 2 partners and 30 people book Morning, you will be in trouble - consider a per-slot cap.
 
 ## Phase 1 scope
-16. Partner screens are Phase 2, so in Phase 1 **the admin moves the booking** through On the way → Picked up (enters measured weights) → Paid (cash/UPI). Without this you could not test the full flow.
-17. Partners only see "waiting for approval" / "approved" for now. They see no customer data at all, so the "phone number only on pickup day" rule is not broken; it will be enforced in Phase 2.
+16. The admin can still move a booking by hand (On the way → Picked up → Paid) **without the customer code**. This is a backup for when a partner's phone fails. It also means you must trust whoever has the admin login.
+17. (Replaced by the Phase 2 list below.)
 18. The app does not send any notification (SMS/WhatsApp) when a booking is made or assigned. The admin must check the dashboard. Worth adding a WhatsApp alert early.
 
 ## Login and security
@@ -39,3 +39,14 @@
 23. **Node.js 22.13+ with its built-in SQLite**, and no other packages. Easy to run and nothing to install, but your hosting must offer Node 22. SQLite (one file) is fine for one city and thousands of bookings; it can be moved to Postgres/Supabase later if needed.
 24. The app shell is cached on the phone for speed. After you deploy an update, users see it on the **second** time they open the app.
 25. English only for now. All text is in `public/i18n/en.js`, ready for Telugu.
+
+## Phase 2
+26. **Confirmation code**: after the partner enters weights, the customer sees the amount and a 4-digit code **inside the app**. SMS for this code is not connected yet (same blocker as OTP). So for now the customer must have the app open at the door. If many of your customers are elderly or book by phone call, this will be a problem - tell me and we can add an "admin confirms by phone" path.
+27. The code is new every time the partner changes the weights. 5 wrong tries lock it until the partner calculates again.
+28. **"Route order" is simple sorting**: time slot → PIN code → locality. It is not real route planning (that was out of scope). The map link opens Google Maps with the typed address, not an exact pin drop, so bad addresses give bad map results.
+29. The partner can start a pickup ("On the way") and enter weights **only on the pickup date**.
+30. **Who pays the customer?** I assumed the partner pays the customer at the door (cash from pocket or UPI from their own phone) and you settle with the partner later. The Earnings tab shows cash and UPI paid out so you can settle. The app does not track partner settlements yet.
+31. "Phone number only on pickup day": the partner sees the address for upcoming pickups (to plan), but the phone number and Call button appear only on the pickup date. After that day the number is hidden again.
+32. The partner sees their own earning per pickup, but never the resale price or your margin.
+33. A rating is 1-5 stars with an optional comment, given once, and cannot be edited. The partner sees their average, and the stars on each pickup, but ratings are not anonymous (the partner can tell who gave them).
+34. The customer's booking page checks for updates every 20 seconds while a pickup is in progress. There are still no push notifications.

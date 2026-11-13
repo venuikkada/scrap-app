@@ -4,7 +4,7 @@ import {
 } from '../ui.js';
 import { t } from '../i18n.js';
 import { istNow } from '../rules.js';
-import { STATUS_FLOW, statusSteps, itemsTable, amountsBox } from './customer.js';
+import { STATUS_FLOW, statusSteps, itemsTable, amountsBox, stars } from './customer.js';
 
 export const tabs = [
   ['/', 'admin.tab.dashboard'],
@@ -149,13 +149,13 @@ async function bookingDetail(id) {
     ${['assigned', 'on_the_way'].includes(s)
       ? html`<form class="card" id="pickup" novalidate>
           <h2 style="margin-top:0">${t('abook.measuredTitle')}</h2>
-          <p class="small muted">${t('abook.measuredHint')}</p>
+          <p class="small muted">${t('abook.measuredHint')} ${t('abook.overrideHint')}</p>
           ${b.items.map(
             (i) => html`<div class="item">
               <div class="grow"><b>${t('cat.' + i.key)}</b>
                 <div class="small muted">${t('abook.estimated', { q: qty(i.estQty, i.unit) })} · ${perUnit(i.buyPaise, i.unit)}</div></div>
               <input type="number" inputmode="decimal" min="0" step="${i.unit === 'piece' ? '1' : '0.1'}"
-                style="width:96px" data-item="${i.id}" value="${i.estQty}"
+                style="width:96px" data-item="${i.id}" value="${i.measuredQty ?? i.estQty}"
                 aria-label="${t('cat.' + i.key)}">
               <span class="small muted" style="width:26px">${t(i.unit === 'piece' ? 'unit.pc' : 'unit.kg')}</span>
             </div>`
@@ -180,8 +180,11 @@ async function bookingDetail(id) {
     <div class="card">${amountsBox(b)}</div>
     <div class="card">
       <h2 style="margin-top:0">${t('abook.threeAmounts')}</h2>
-      ${three(b.final || b.est, !b.final)}
+      ${three(b.final || b.proposed || b.est, !b.final)}
     </div>
+    ${b.proposed ? html`<div class="notice info">${t('abook.waitingCode')}</div>` : ''}
+    ${b.rating ? html`<div class="card"><div class="small muted">${t('rate.customerGave')}</div>${stars(b.rating.stars)}
+      ${b.rating.comment ? html`<div>${b.rating.comment}</div>` : ''}</div>` : ''}
 
     ${['requested', 'assigned', 'on_the_way'].includes(s)
       ? html`<button class="btn danger" id="cancel">${t('detail.cancel')}</button>`
@@ -284,6 +287,7 @@ async function users(role) {
         <div class="small muted">${t(isPartner ? 'users.partnerStats' : 'users.customerStats', {
           n: String(u.bookings), done: String(u.completed),
         })}</div>
+        ${isPartner && u.ratings > 0 ? html`<div class="small">${u.rating.toFixed(1)} ★ <span class="muted">${t('earn.ratingCount', { n: String(u.ratings) })}</span></div>` : ''}
         <div class="btn-row" style="margin-top:10px">
           ${u.status === 'pending' ? html`<button class="btn sm" data-set="approved" data-id="${u.id}">${t('users.approve')}</button>` : ''}
           ${u.status === 'blocked'

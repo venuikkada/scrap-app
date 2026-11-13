@@ -1,0 +1,13 @@
+{
+  "name": "scrap-pickup",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Doorstep scrap pickup PWA (Phase 1)",
+  "engines": { "node": ">=22.13" },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/index.js",
+    "add-admin": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/add-admin.js",
+    "test": "node --disable-warning=ExperimentalWarning --test"
+  }
+}

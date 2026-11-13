@@ -1,13 +1,16 @@
-import { api, html, render, state, busy, $, toastErr, errText, phone } from '../ui.js';
+import { api, html, render, state, busy, $, toastErr, errText, phone, ICON } from '../ui.js';
 import { t } from '../i18n.js';
 
 export function login(onDone) {
   const test = state.app.testOtp;
   render(html`
-    <h1>${t('login.title', { app: state.app.name })}</h1>
-    <p class="muted">${t('login.subtitle', { city: state.app.city })}</p>
-    <form id="f" class="card" novalidate>
-      <label for="mobile">${t('login.mobile')}</label>
+    <div class="login-hero">
+      <div class="login-logo">${ICON.logo}</div>
+      <h1>${t('login.title', { app: state.app.name })}</h1>
+      <p>${t('login.subtitle', { city: state.app.city })}</p>
+    </div>
+    <form id="f" class="card login-card" novalidate>
+      <label for="mobile" style="margin-top:0">${t('login.mobile')}</label>
       <div class="inline-input"><span>+91</span>
         <input id="mobile" type="tel" inputmode="numeric" autocomplete="tel-national" maxlength="10" placeholder="98765 43210" required>
       </div>
@@ -15,7 +18,12 @@ export function login(onDone) {
       <div id="msg"></div>
       <button class="btn" style="margin-top:14px">${t('login.sendOtp')}</button>
     </form>
-    ${test ? html`<div class="notice info">${t('login.testMode', { otp: test })}</div>` : ''}`);
+    ${test ? html`<div class="notice info">${t('login.testMode', { otp: test })}</div>` : ''}
+    <div class="perks">
+      <div class="perk"><span class="emo">💰</span>${t('login.perk1')}</div>
+      <div class="perk"><span class="emo">⚖️</span>${t('login.perk2')}</div>
+      <div class="perk"><span class="emo">🚪</span>${t('login.perk3')}</div>
+    </div>`);
   $('#f').onsubmit = (ev) => {
     ev.preventDefault();
     const mobile = $('#mobile').value.replace(/\D/g, '');

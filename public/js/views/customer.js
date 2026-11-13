@@ -1,6 +1,6 @@
 import {
   api, html, render, state, busy, $, $$, toast, go,
-  money, qty, perUnit, dateLabel, addressLine, badge,
+  money, qty, perUnit, dateLabel, addressLine, badge, catIcon,
 } from '../ui.js';
 import { t } from '../i18n.js';
 import { computeAmounts, normaliseQty, istNow } from '../rules.js';
@@ -28,21 +28,41 @@ const slotLabel = (id) => t('slot.' + id);
 
 // ---------- Home ----------
 async function home() {
-  const { bookings } = await api('GET', '/bookings');
+  const [{ bookings }, cat] = await Promise.all([api('GET', '/bookings'), api('GET', '/catalog')]);
   const today = istNow().date;
   render(html`
-    <h1>${t('home.hello', { name: state.user.name || '' })}</h1>
-    <a class="btn" href="#/book">${t('home.book')}</a>
-    <a class="btn alt" href="#/addresses" style="margin-top:10px">${t('home.addresses')}</a>
+    <section class="hero">
+      <div class="hero-hi">${t('home.hello', { name: state.user.name || '' })} 👋</div>
+      <div class="hero-title">${t('home.heroTitle')}</div>
+      <div class="hero-sub">${t('home.heroSub', { amount: money(cat.thresholdPaise) })}</div>
+      <a class="btn light" href="#/book">${t('home.book')}</a>
+    </section>
+
+    <h2>${t('home.rates')}</h2>
+    <div class="strip">
+      ${cat.categories.map(
+        (c) => html`<div class="rate-chip">${catIcon(c.key)}<b>${t('cat.' + c.key)}</b><span>${perUnit(c.buyPaise, c.unit)}</span></div>`
+      )}
+    </div>
+
     <h2>${t('home.myBookings')}</h2>
-    ${bookings.length === 0 ? html`<p class="muted">${t('home.noBookings')}</p>` : ''}
+    ${bookings.length === 0
+      ? html`<div class="card">
+          ${[1, 2, 3].map(
+            (n) => html`<div class="how"><span class="n">${String(n)}</span>
+              <div><b>${t('how.t' + n)}</b><div class="small muted">${t('how.d' + n)}</div></div></div>`
+          )}
+        </div>`
+      : ''}
     ${bookings.map(
       (b) => html`<a class="card" href="#/bookings/${b.id}">
-        <div class="row"><b>${dateLabel(b.pickupDate, today)}</b>${badge(b.status)}</div>
-        <div class="muted small">${slotLabel(b.slot)}</div>
-        <div class="row" style="margin-top:6px">
-          <span class="muted small">${t('common.bookingNo', { id: String(b.id) })}</span>
-          <b>${b.final ? money(b.final.customer) : t('home.approx', { amount: money(b.est.customer) })}</b>
+        <div class="row">
+          <span class="ico ${b.status === 'cancelled' ? 'red' : ['picked_up', 'paid'].includes(b.status) ? '' : 'amber'}" aria-hidden="true">${
+            b.status === 'cancelled' ? '✖️' : ['picked_up', 'paid'].includes(b.status) ? '✅' : '🛺'}</span>
+          <div class="grow"><b>${dateLabel(b.pickupDate, today)}</b>
+            <div class="muted small">${slotLabel(b.slot)} · #${b.id}</div></div>
+          <div class="right">${badge(b.status)}
+            <div class="bold" style="margin-top:4px">${b.final ? money(b.final.customer) : t('home.approx', { amount: money(b.est.customer) })}</div></div>
         </div>
       </a>`
     )}`);
@@ -53,11 +73,11 @@ async function addresses() {
   const { addresses: list } = await api('GET', '/addresses');
   render(html`
     <h1>${t('addr.title')}</h1>
-    ${list.length === 0 ? html`<p class="muted">${t('addr.none')}</p>` : ''}
+    ${list.length === 0 ? html`<div class="card empty"><span class="emo">📍</span>${t('addr.none')}</div>` : ''}
     ${list.map(
       (a) => html`<div class="card">
-        <b>${a.name}</b>
-        <div>${addressLine(a)}</div>
+        <div class="row" style="align-items:flex-start"><span class="ico" aria-hidden="true">🏠</span>
+          <div class="grow"><b>${a.name}</b><div class="muted">${addressLine(a)}</div></div></div>
         ${a.serviceable ? '' : html`<div class="notice">${t('addr.notServiced', { pin: a.pin })}</div>`}
         <div class="btn-row" style="margin-top:10px">
           <a class="btn alt sm" href="#/addresses/${a.id}">${t('common.edit')}</a>
@@ -65,8 +85,7 @@ async function addresses() {
         </div>
       </div>`
     )}
-    <a class="btn" href="#/addresses/new">${t('addr.add')}</a>
-    <a class="btn alt" href="#/" style="margin-top:10px">${t('common.back')}</a>`);
+    <a class="btn" href="#/addresses/new">${t('addr.add')}</a>`);
   $$('[data-del]').forEach((b) => {
     b.onclick = () => {
       if (!confirm(t('addr.confirmDelete'))) return;
@@ -151,7 +170,9 @@ function totalBox(cat) {
     <div class="small muted">${t('book.finalNote')}</div>`;
 }
 
-const stepHead = (n) => html`<p class="muted small">${t('book.step', { n: String(n) })}</p>`;
+const stepHead = (n) => html`<div class="progress" aria-label="${t('book.step', { n: String(n) })}">
+  ${[1, 2, 3].map((i) => html`<i class="${i <= n ? 'on' : ''}"></i>`)}</div>
+  <p class="muted small" style="margin:0">${t('book.step', { n: String(n) })}</p>`;
 
 function stepItems(ctx) {
   const { cat } = ctx;
@@ -163,6 +184,7 @@ function stepItems(ctx) {
       ${cat.categories.map((c) => {
         const piece = c.unit === 'piece';
         return html`<div class="item">
+          ${catIcon(c.key)}
           <div class="grow"><b>${t('cat.' + c.key)}</b>
             <div class="small muted">${perUnit(c.buyPaise, c.unit)}</div></div>
           <div class="stepper">
@@ -172,7 +194,6 @@ function stepItems(ctx) {
               aria-label="${t('cat.' + c.key)} (${t(piece ? 'unit.pieces' : 'unit.kg')})">
             <button type="button" data-step="1" data-id="${c.id}" aria-label="${t('book.more')}">+</button>
           </div>
-          <span class="small muted" style="width:26px">${t(piece ? 'unit.pc' : 'unit.kg')}</span>
         </div>`;
       })}
     </div>

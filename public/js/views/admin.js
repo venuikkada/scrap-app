@@ -31,15 +31,16 @@ const filter = { date: istNow().date, status: '' };
 // ---------- Dashboard ----------
 async function dashboard() {
   const d = await api('GET', '/admin/dashboard');
-  const stat = (label, value) => html`<div class="stat"><div class="big">${value}</div><div class="muted small">${label}</div></div>`;
+  const stat = (label, value, emoji, tint = '') => html`<div class="stat"><span class="ico ${tint}" aria-hidden="true">${emoji}</span>
+    <div class="big">${value}</div><div class="muted small">${label}</div></div>`;
   render(html`
     <h1>${t('dash.title')}</h1>
     <p class="muted">${dateLabel(d.today, d.today)}</p>
     <div class="grid2">
-      ${stat(t('dash.todaysBookings'), d.todaysBookings)}
-      ${stat(t('dash.completedToday'), d.completedToday)}
-      ${stat(t('dash.pickupValue'), money(d.pickupValueToday))}
-      ${stat(t('dash.activePartners'), d.activePartners)}
+      ${stat(t('dash.todaysBookings'), d.todaysBookings, '📅', 'blue')}
+      ${stat(t('dash.completedToday'), d.completedToday, '✅')}
+      ${stat(t('dash.pickupValue'), money(d.pickupValueToday), '💰', 'amber')}
+      ${stat(t('dash.activePartners'), d.activePartners, '🛺')}
     </div>
     <h2>${t('dash.needsAction')}</h2>
     ${d.unassigned === 0 && d.pendingPartners === 0 ? html`<p class="muted">${t('dash.allClear')}</p>` : ''}
@@ -68,8 +69,8 @@ async function bookings() {
   render(html`
     <h1>${t('admin.tab.bookings')}</h1>
     <div class="card">
-      <div class="grid2">
-        <div><label for="fdate">${t('abook.date')}</label>
+      <div>
+        <div><label for="fdate" style="margin-top:0">${t('abook.date')}</label>
           <input id="fdate" type="date" value="${filter.date}"></div>
         <div><label for="fstatus">${t('abook.status')}</label>
           <select id="fstatus">

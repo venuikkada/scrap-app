@@ -49,7 +49,7 @@ async function pickups() {
       )}
     </div>
     <p class="muted small" style="margin-top:10px">${t('pick.count', { n: String(r.pickups.length), open: String(open) })}</p>
-    ${r.pickups.length === 0 ? html`<div class="card muted">${t('pick.none')}</div>` : ''}
+    ${r.pickups.length === 0 ? html`<div class="card empty"><span class="emo">🛺</span>${t('pick.none')}</div>` : ''}
     ${r.pickups.map((p) => {
       n += 1;
       const head = p.slot !== lastSlot ? html`<h2>${t('slot.' + p.slot)}</h2>` : '';
@@ -66,6 +66,7 @@ async function pickups() {
         </div>`;
     })}
     <button class="btn alt" id="refresh" style="margin-top:6px">${t('common.refresh')}</button>`);
+  
   $$('input[name=day]').forEach((el) => {
     el.onchange = () => {
       day = el.value === r.today ? null : el.value;
@@ -192,8 +193,8 @@ async function earnings() {
     <h1>${t('earn.title')}</h1>
     <p class="muted">${dateLabel(r.today, r.today)}</p>
     <div class="grid2">
-      <div class="stat"><div class="big">${money(d.payout)}</div><div class="muted small">${t('earn.today')}</div></div>
-      <div class="stat"><div class="big">${String(d.pickups)}</div><div class="muted small">${t('earn.pickups')}</div></div>
+      <div class="stat"><span class="ico amber" aria-hidden="true">💰</span><div class="big">${money(d.payout)}</div><div class="muted small">${t('earn.today')}</div></div>
+      <div class="stat"><span class="ico" aria-hidden="true">✅</span><div class="big">${String(d.pickups)}</div><div class="muted small">${t('earn.pickups')}</div></div>
     </div>
     <div class="card" style="margin-top:12px">
       <div class="small muted">${t('earn.paidToCustomers')}</div>

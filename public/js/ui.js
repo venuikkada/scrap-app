@@ -88,3 +88,19 @@ export const go = (hash) => { location.hash = hash; };
 
 // ---- shared session state ----
 export const state = { app: null, user: null };
+
+// ---- icons ----
+const svg = (d) => new Raw(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`);
+export const ICON = {
+  home: svg('<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/>'),
+  plus: svg('<circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/>'),
+  pin: svg('<path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.500C5 14.800 12 21 12 21z"/><circle cx="12" cy="9.500" r="2.500"/>'),
+  truck: svg('<path d="M3 6h11v10H3z"/><path d="M14 9h4l3 3v4h-7z"/><circle cx="7.500" cy="17.500" r="1.800"/><circle cx="17.500" cy="17.500" r="1.800"/>'),
+  wallet: svg('<path d="M4 7h15a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h12"/><path d="M16 13h2"/>'),
+  logo: new Raw(`<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20.5 3.5v4h-4"/><path d="M9 9h6M9 12h6M10.5 9c2.6 0 2.6 3 0 3l3.2 4"/></svg>`),
+};
+const CAT_EMOJI = {
+  newspaper: '📰', cardboard: '📦', books: '📚', plastic_bottles: '🧴', plastic_mixed: '🛍️',
+  iron: '🔩', copper: '🔌', aluminium: '🥫', appliances: '📺', ewaste: '💻',
+};
+export const catIcon = (key) => html`<span class="ico" aria-hidden="true">${CAT_EMOJI[key] || '♻️'}</span>`;

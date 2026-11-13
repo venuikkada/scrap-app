@@ -1,4 +1,4 @@
-import { api, html, render, state, toastErr, errText, go, $ } from './ui.js';
+import { api, html, render, state, toastErr, errText, go, $, ICON } from './ui.js';
 import { t } from './i18n.js';
 import * as auth from './views/auth.js';
 import * as customer from './views/customer.js';
@@ -7,13 +7,29 @@ import * as partner from './views/partner.js';
 
 const $tabs = document.getElementById('tabs');
 const $logout = document.getElementById('logout');
+const $nav = document.getElementById('bottomnav');
+
+// Bottom navigation for customers and partners (shown on their main screens only).
+const NAVS = {
+  customer: [['/', 'nav.home', 'home'], ['/book', 'nav.book', 'plus'], ['/addresses', 'nav.addresses', 'pin']],
+  partner: [['/', 'ptab.pickups', 'truck'], ['/earnings', 'ptab.earnings', 'wallet']],
+};
 
 function chrome(path) {
   const u = state.user;
   $logout.hidden = !u;
   $logout.textContent = t('common.logout');
   const ok = u && u.status === 'approved';
-  const tabs = ok && u.role === 'admin' ? admin.tabs : ok && u.role === 'partner' ? partner.tabs : null;
+  const tabs = ok && u.role === 'admin' ? admin.tabs : null;
+  const nav = ok && NAVS[u.role];
+  const showNav = !!nav && nav.some(([href]) => href === path && href !== '/book');
+  $nav.hidden = !showNav;
+  document.body.classList.toggle('has-nav', showNav);
+  if (showNav)
+    $nav.innerHTML = html`${nav.map(
+      ([href, key, icon]) => html`<a href="#${href}" class="${href === path ? 'on' : ''}">
+        <span class="nav-ico">${ICON[icon]}</span>${t(key)}</a>`
+    )}`.s;
   $tabs.hidden = !tabs;
   if (tabs) {
     $tabs.innerHTML = html`${tabs.map(

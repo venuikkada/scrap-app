@@ -5,8 +5,9 @@
   "type": "module",
   "description": "Doorstep scrap pickup PWA (Phase 1)",
   "engines": { "node": ">=22.13" },
+  "main": "app.js",
   "scripts": {
-    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning server/index.js",
+    "start": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning app.js",
     "add-admin": "node --env-file-if-exists=.env --disable-warning=ExperimentalWarning scripts/add-admin.js",
     "test": "node --disable-warning=ExperimentalWarning --test"
   }

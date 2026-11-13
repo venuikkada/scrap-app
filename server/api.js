@@ -69,7 +69,7 @@ export function createApi(db, cfg) {
   const appInfo = () => ({
     name: cfg.appName,
     city: cfg.city,
-    testOtp: cfg.otpMode === 'test' ? cfg.testOtp : null,
+    testOtp: cfg.otpMode === 'test' && !cfg.hideTestOtp ? cfg.testOtp : null,
   });
 
   function currentRates() {

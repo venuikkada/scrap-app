@@ -117,7 +117,7 @@ export function createServer(overrides = {}) {
   return { server, db, cfg };
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+export function start() {
   if (config.production && config.otpMode === 'test' && !config.allowTestOtpInProduction) {
     console.error(
       'Refusing to start: NODE_ENV=production with OTP_MODE=test would let anyone log in as any user.\n' +
@@ -125,10 +125,18 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
     process.exit(1);
   }
-  const { server, cfg } = createServer();
+  const { server, db, cfg } = createServer();
+  for (const mobile of cfg.adminMobiles) {
+    db.prepare(
+      `INSERT INTO users (mobile, name, role, status, created_at) VALUES (?, 'Admin', 'admin', 'approved', ?)
+       ON CONFLICT(mobile) DO UPDATE SET role = 'admin', status = 'approved'`
+    ).run(mobile, new Date().toISOString());
+  }
   server.listen(cfg.port, () => {
-    console.log(`${cfg.appName} is running: http://localhost:${cfg.port}`);
+    console.log(`${cfg.appName} is running on port ${cfg.port}`);
     if (cfg.otpMode === 'test')
-      console.log(`TEST MODE: every mobile number logs in with OTP ${cfg.testOtp}. Do not use for real customers.`);
+      console.log('TEST MODE: every mobile number logs in with the same test OTP. Do not use for real customers.');
   });
 }
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) start();
